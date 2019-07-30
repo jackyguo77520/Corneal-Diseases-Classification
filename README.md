@@ -1,2 +1,2 @@
 # Corneal-Diseases-Classification
-A implementation of Corneal Diseases classification by pytorch
+An implementation of Corneal Diseases classification by pytorch
