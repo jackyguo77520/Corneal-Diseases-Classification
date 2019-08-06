@@ -9,7 +9,7 @@ from dataloader import DataUtils, Gen
 # if use cuda
 use_cuda = True
 # data directory
-train_root = '/media/data_storage/ophthalmology/20181019_labeled_corn/corn_second_level/'
+train_root = '/media/data_storage/ophthalmology/cornea_disease/'
 
 ####################### parameters ##############################################
 if use_cuda:
@@ -22,7 +22,7 @@ batch_size = 16
 size = 299
 num_workers = 4
 epoch_th = np.array([5, 20])
-day = '20181113'
+day = '20181115'
 multi_task = True
 
 if multi_task:
@@ -30,8 +30,8 @@ if multi_task:
 else:
     model_name = 'eye_fore'
 
-classes = ['Cataract', 'Normal_Surface', 'Infectious_Corneal_Disease',
-           'Non_infectious_Corneal_Disease', 'Corneal_Degeneration', 'Neoplasm']
+classes = ['Cataract', 'Normal_Surface', 'Cornea_Infectious',
+           'Cornea_Non_Infectious', 'Cornea_Degeneration', 'Cornea_Neoplasm']
 
 ########### generate model name #####################################################
 def get_save_model_path(name='patch', day='20180904', k=1, loop=0):
@@ -48,7 +48,8 @@ def main():
     data_utils = DataUtils(path_dict=class_dict, classes=classes, n_folds=5, seed=10)
 
     # train n_folds times for 5fold cross validation
-    for kth in range(n_folds):
+    # for kth in range(n_folds):
+    for kth in range(1):
         print('The %dth fold ...' % kth)
         model_path = get_save_model_path(name=model_name, day=day, k=kth, loop=0)
         print('model save path is: ', model_path)

@@ -3,8 +3,34 @@ import numpy as np
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch
+from sklearn.metrics import auc
+from sklearn.metrics.ranking import _binary_clf_curve
 from focalloss import FocalLoss
 
+def spec_sens(y_true, y_pred, pos_label=None, sample_weight=None):
+    # get false positive and true positive
+    fps, tps, thresholds = _binary_clf_curve(y_true, y_pred,
+                                             pos_label=pos_label,
+                                             sample_weight=sample_weight)
+    # positive sample number
+    actual_p = sum(y_true)
+    # negative sample number
+    actual_f = len(y_true) - sum(y_true)
+    fps = fps * 1.0 / actual_f
+    tps = tps * 1.0 / actual_p
+    # true negative
+    tns = 1 - fps
+    # specificity and sensitivity
+    spec = tns / (fps + tns)
+    sens = tps / tps[-1]
+
+    dis = []
+    for k in range(len(sens)):
+        d = (1 - spec[k]) * (1 - spec[k]) + (1 - sens[k]) * (1 - sens[k])
+        dis.append(d)
+    index = np.argmin(dis)
+
+    return spec, sens, thresholds, index
 
 ######### net operators ########################################################
 class NetOpe:
@@ -104,8 +130,7 @@ class NetOpe:
             ave_loss = self._train_val(epoch, test_loader, num, optimizer_ft=None, type='val')
             ave_loss = np.mean(ave_loss)
         elif metrics == 'auc':
-            predict_dict, predict_label_dict = self._train_val(epoch, test_loader, num, optimizer_ft=None,
-                                                               type='predict')
+            predict_dict, predict_label_dict, _ = self._train_val(epoch, test_loader, num, optimizer_ft=None, type='predict')
             best_sens, best_spec, best_thre, aucc = self.sens_spec_for_dict(predict_dict, predict_label_dict)
             ave_loss = 1 - np.mean(aucc)
             str_sens = ','.join(['%.3f' % m for m in best_sens])
@@ -166,7 +191,7 @@ class NetOpe:
             else:
                 preds = self.net(inputs)
                 middle_v = self.net.pool(self.net.features(inputs))
-                middle_v = middle_v.cpu().numpy().squeeze()
+                middle_v = middle_v.cpu().detach().numpy().squeeze()
             # print(preds.shape)
             # exit()
             if self.multi_task:
@@ -236,3 +261,35 @@ class NetOpe:
         if type == 'predict':
             return predict_dict, predict_label_dict, predict_middle_vector
         return ave_loss
+
+    def sens_spec_for_dict(self, predict_dict, predict_labels_dict, layer=-1):
+        """
+        这个函数输入为以path为key，predict的prob为value的dict
+        以及label为value的dict
+        输出为sens的list，spec的list，thre的list以及auc的list
+        list的长度为类别的长度
+        """
+        pred = []
+        true = []
+        for name in predict_dict.keys():
+            if layer > -1:
+                p = predict_dict[name][layer]
+                t = predict_labels_dict[name][layer]
+            else:
+                p = predict_dict[name]
+                t = predict_labels_dict[name]
+            pred.append(p)
+            true.append(t)
+        # print(pred[:10], true[:10])
+        sens, spec, thre, aucc = [], [], [], []
+
+        for s, cls in enumerate(self.classes):
+            sp, se, th, best_ind = spec_sens(np.array(true)[:, s], np.array(pred)[:, s], pos_label=None)
+            au = auc(sp, se)
+            sens.append(se[best_ind])
+            spec.append(sp[best_ind])
+            thre.append(th[best_ind])
+            aucc.append(au)
+
+        return sens, spec, thre, aucc
+
